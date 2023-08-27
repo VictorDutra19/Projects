@@ -1,0 +1,208 @@
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from PyQt5 import QtWidgets
+import sys
+import re
+from PyQt5.QtWidgets import (QApplication, QWidget, QInputDialog, QLineEdit, 
+                             QLabel, QVBoxLayout, QPushButton)
+from PyQt5.QtGui     import QIcon
+import pandas as pd
+
+class App(QWidget):
+
+    def __init__(self):
+        super().__init__()
+        self.title  = 'Relação de componentes WO'#titulo
+        self.left   = 50
+        self.top    = 50
+        self.width  = 640
+        self.height = 480
+
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle(self.title)
+        self.setGeometry(self.left, self.top, self.width, self.height)
+
+        self.label = QLabel()
+        self.label.setStyleSheet("color: green; font: 16px;")
+       
+        layout = QVBoxLayout()
+        layout.addWidget(self.label)
+        layout.addWidget(QPushButton("Entrar dados", clicked=self.getText))
+        self.setLayout(layout)        
+             
+        
+
+
+        self.show()   
+
+    def getText(self):  
+
+        user_Arquivo, Pressed_Arquivo = QInputDialog.getText(
+                self, 
+                "Arquivo", 
+                "Arquivo wo(colocar.xlsx):", 
+                QLineEdit.Normal, "")
+        user_WO, Pressed_WO = QInputDialog.getText(
+                self, 
+                "WorkOn", 
+                "Número WO:", 
+                QLineEdit.Normal, "")
+
+        user_cliente, Pressed_cliente = QInputDialog.getText(
+                self, 
+                "Cliente", 
+                "Nome do cliente:", 
+                QLineEdit.Normal, "")
+        user_linhas, Pressed_linhas = QInputDialog.getText(
+                self, 
+                "Linhas", 
+                "Numero de linhas:", 
+                QLineEdit.Normal, "")
+        user_liberacao, Pressed_liberacao = QInputDialog.getText(
+                self, 
+                "Data de liberação", 
+                "Data de liberação(D/M/A):", 
+                QLineEdit.Normal, "")
+        
+        # user_expedicao, Pressed_expedicao = QInputDialog.getText(
+        #         self, 
+        #         "Data de Expedição", 
+        #         "Data de Expedição(D/M/A):", 
+        #         QLineEdit.Normal, "")
+        
+
+
+
+
+
+        longo = pd.read_excel(user_Arquivo, 'Formulario SpareParts')#ler wo
+
+        longo = longo[ ['Unnamed: 1', 'Unnamed: 8','Unnamed: 10']]#Selecionar linhas 
+
+        #retirando o unnamed:
+        longo = longo.rename(columns={'Unnamed: 1': 'PN', 'Unnamed: 8': 'Item','Unnamed: 10': 'Qtd'}) #renomeia as colunas
+        longo = longo.dropna()#tira linhas com elementos nulos
+        longo = longo.drop(4, axis=0)#Tira titulo falso
+
+        #inverter colunas
+        cols = list(longo.columns) #lista as colunas
+        a, b, c = cols.index('PN'), cols.index('Item'), cols.index('Qtd')#seleiona a posicao das colunas
+        cols[a], cols[b], cols[c]= cols[b], cols[c], cols[a]#inverte as posições
+        longo = longo[cols]#atribui as posições novas
+     
+        #cria novas colunas
+        longo["N° série"] = user_Arquivo
+        longo["Identeficação"] = "PEÇA EMBALAGEM"
+        longo["Status Separação"] = " "
+
+      
+
+        #separa ordem e seta index
+        longo = longo.reset_index()
+        del longo['index']
+
+
+        #Gera tabela para identificação de montagem
+        dfs= pd.DataFrame([['Nome                            ','EDV:                            ' ,'Data:                            '], ['Nome:                            ','EDV:                            ' ,'Data:                            '],['                            ','INSPESÃO FINAL:       ' ,'                            '],['Nome:                            ','EDV:                            ' ,'Data:                            ']], columns=['','MONTAGEM KIT:',''])
+
+
+        #formato
+        fig = plt.figure(figsize = (16.53, 11.69), dpi = 500)
+        plt.subplots_adjust(bottom=0.2, right=0.8, top=0.3)
+        fig.tight_layout()
+
+        #Chamar filhos pelos pais part number
+
+        pf = pd.read_excel("Pais_filhos_PN.xlsx")#leitura da paternidade 
+        ex = pd.merge(longo, pf, on="PN_Bosch", how="left")#Junta pais aos filhos
+
+        ex.loc[ex.PN_Bosch.duplicated(), ['Item_x','Qtd',	'PN','N° série','Identeficação']] = ''#caça PN e remove duplicatas 
+        ex = ex.replace({np.nan:""})#Remove Nan
+        longo=ex#atribui a planilha mesclada para a planilha original
+
+
+
+
+        #PRINT TABELAS
+        ax = fig.add_subplot(111)
+        
+        aaa = ax.table(cellText = longo.values,
+                rowLabels = longo.index,
+                colLabels = longo.columns,
+                
+                # rowColours= ['white','gray','white','gray','white','gray'],
+                colWidths=[0.17, 0.02,0.08,0.04,0.07,0.07,0.10,0.02,0.08,0.08],#TAMANHO DEVE TER MESMO INDICE DO NUMERO DE COLUNAS
+                loc = "top"
+                )
+        aaa.auto_set_font_size(False)
+        aaa.set_fontsize(5)
+        ax.axis("off");
+        d = {
+        'OBSERVAÇÕES/OCORRENCIAS': ['--', '--']
+        }
+        df = pd.DataFrame(data=d)
+        df = df.reset_index(drop=True)#reescreve index
+        ax1 = fig.add_subplot(211)
+        ax1.table(cellText = df.values,
+                rowLabels = df.index,
+                colLabels = df.columns,
+                colWidths=[0.60],#TAMANHO DEVE TER MESMO INDICE DO NUMERO DE COLUNAS
+                loc = "bottom"
+                )
+        ax1.axis("off");
+        dfs = dfs.reset_index(drop=True)#reescreve index
+        ax = fig.add_subplot(111)
+        ab=ax.table(cellText = dfs.values,
+                rowLabels = 10*dfs.index,
+                colLabels = dfs.columns,
+                
+                colWidths=3*[0.1,0.1,0.1,0.1,0.1,0.1],#TAMANHO DEVE TER MESMO INDICE DO NUMERO DE COLUNAS
+                loc = "bottom"
+                )
+        ab.auto_set_font_size(False)
+        ab.set_fontsize(5)
+
+        # #CONFIGURANDO INPUTS TITULO
+        b ='Cliente: '
+        a= user_cliente #str(input("CLIENTE:"))
+        c =b+a
+        e = 'Linhas: '
+        f= user_linhas#input("Quantidade:")
+        g =e+f
+        h= 'WO: '
+        i= user_WO
+        j= h+i
+        k= 'Data de liberação: '
+        l = user_liberacao#input("Data de liberação: ")
+        m= k+l
+        t='RELAÇÃO DE COMPONENTES DO WORKON'
+
+        #titulo
+        # POSICIONA IMPUTS (X,Y,VARIAVEL, ESTILO, TAMANHO, POSICAO)
+        ax.text(.22, 7, 'RELAÇÃO DE COMPONENTES',style ='italic',fontsize = 20,bbox ={'facecolor':'green','alpha':0.6, 'pad':1})
+        ax.text(.22, 6.50, c, weight='normal',style ='italic', fontsize = 9, ha='left')
+        ax.text(.37, 6.50, g, weight='normal',style ='italic', fontsize = 9, ha='left')
+        ax.text(.45, 6.50, j, weight='normal',style ='italic', fontsize = 9, ha='left')
+        ax.text(.53, 6.50, m, weight='normal',style ='italic', fontsize = 9, ha='left')
+        ax.text(.73, 6.50, 'Data expedição WO:', weight='normal',style ='italic', fontsize = 9, ha='left')
+
+        ax.axis("off");
+
+        longo= longo.set_index(['Item_x', 'Qtd','PN_Bosch',"N° série","Identeficação","Status Separação"])#Seta como index o titulo
+
+
+
+
+
+        plt.savefig('Wo.png', orientation='portrait', dpi=400)
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex  = App()
+    sys.exit(app.exec_())
+    main()
+
